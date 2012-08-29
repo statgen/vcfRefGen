@@ -5,6 +5,7 @@
 ../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileSubset1MinAC2.vcf --uncompress --minAC 2 --sampleSubset testFiles/subset1.txt 2> results/vcfFileSubset1MinAC2.vcf.log
 ../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileMinAC1.vcf --uncompress --minAC 1 2> results/vcfFileMinAC1.vcf.log
 ../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileSubset1MinAC1.vcf --uncompress --minAC 1 --sampleSubset testFiles/subset1.txt 2> results/vcfFileSubset1MinAC1.vcf.log
+../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileRegion.vcf --uncompress --filterList testFiles/regionList.txt 2> results/vcfFileRegion.vcf.log
 
 
 diff expected results

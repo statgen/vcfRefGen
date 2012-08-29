@@ -1,6 +1,6 @@
 EXE=vcfRefGen
 ########################
-TOOLBASE = 
+TOOLBASE = Interval IntervalTree
 SRCONLY = Main.cpp
 HDRONLY = 
 

@@ -21,6 +21,7 @@
 #include "VcfFileReader.h"
 #include "VcfFileWriter.h"
 #include "StringBasics.h"
+#include "IntervalTree.h"
 
 void vcfVersion()
 {
@@ -37,7 +38,7 @@ void usage()
 {
     vcfVersion();
     description();
-    std::cerr << "\t./vcfRefGen --in <input VCF File> --out <output VCF File> [--uncompress] [--sample <sampleFile.txt>] [--minAC <minAlleleCount>] [--filterList <chr start end> [--params]"<< std::endl;
+    std::cerr << "\t./vcfRefGen --in <input VCF File> --out <output VCF File> [--uncompress] [--sample <sampleFile.txt>] [--minAC <minAlleleCount>] [--filterList <filterFile> [--params]"<< std::endl;
     std::cerr << "\tRequired Parameters:\n"
               << "\t\t--in      : VCF file to read\n"
               << "\t\t--out     : VCF file to write\n"
@@ -45,7 +46,9 @@ void usage()
               << "\t\t--uncompress   : write an uncompressed VCF output file\n"
               << "\t\t--sampleSubset : file with samples IDs to keep.\n"
               << "\t\t--minAC        : min minor allele count to keep\n"
-              << "\t\t--filterList   : regions to include, format: chr start end\n"
+              << "\t\t--filterList   : filename of file containing regions to include,\n"
+              << "\t\t                 format: start end\n"
+              << "\t\t                 start & end positions should be 1-based inclusive positions.\n"
               << "\t\t--params       : print the parameter settings\n"
               << std::endl;
 }
@@ -62,6 +65,9 @@ int main(int argc, char ** argv)
     bool uncompress = false;
     bool params = false;
     
+    IntervalTree<int> regions;
+    std::vector<int> intersection;
+
     // Read in the parameters.    
     ParameterList inputParameters;
     BEGIN_LONG_PARAMETERS(longParameterList)
@@ -136,6 +142,65 @@ int main(int argc, char ** argv)
     inFile.addDiscardRules(VcfFileReader::DISCARD_NON_PHASED | 
                            VcfFileReader::DISCARD_MISSING_GT);
 
+    if(!filterList.IsEmpty())
+    {
+        // Open the filter list.
+        IFILE regionFile = ifopen(filterList, "r");
+        String regionLine;
+        StringArray regionColumn;
+        int start;
+        int end;
+        int intervalVal = 1;
+        if(regionFile == NULL)
+        {
+            std::cerr << "Failed to open " << filterList 
+                      << ", so keeping all positions\n";
+            filterList.Clear();
+        }
+        else
+        {
+            while( regionFile->isOpen() && !regionFile->ifeof())
+            {
+                // Read the next interval
+                regionLine.Clear();
+                regionLine.ReadLine(regionFile);
+                if(regionLine.IsEmpty())
+                {
+                    // Nothing on this line, continue to the next.
+                    continue;
+                }
+                regionColumn.ReplaceColumns(regionLine, ' ');
+                if(regionColumn.Length() != 2)
+                {
+                    std::cerr << "Improperly formatted region line: " 
+                              << regionLine << "; skipping to the next line.\n";
+                    continue;
+                }
+                // Convert the columns to integers.
+                if(!regionColumn[0].AsInteger(start))
+                {
+                    // The start position (1st column) is not an integer.
+                    std::cerr << "Improperly formatted region line, start position "
+                              << "(1st column) is not an integer: "
+                              << regionColumn[0]
+                              << "; Skipping to the next line.\n";
+                    continue;
+                }
+                if(!regionColumn[1].AsInteger(end))
+                {
+                    // The start position (1st column) is not an integer.
+                    std::cerr << "Improperly formatted region line, end position "
+                              << "(2nd column) is not an integer: "
+                              << regionColumn[1]
+                              << "; Skipping to the next line.\n";
+                    continue;
+                }
+                // Add 1-based inclusive intervals.
+                regions.add(start,end, intervalVal);
+            }
+        }
+    }
+
     int numReadRecords = 0;
     int numWrittenRecords = 0;
     int returnVal = 0;
@@ -144,6 +209,19 @@ int main(int argc, char ** argv)
     VcfRecordGenotype::addStoreField("GT");
     while(inFile.readRecord(record))
     {
+        if(!filterList.IsEmpty())
+        {
+            // Check if the region should be kept.
+            intersection.clear();
+            regions.get_intersecting_intervals(record.get1BasedPosition(), intersection);
+            
+            if(intersection.empty())
+            {
+                // not in the interval, so continue to the next record.
+                continue;
+            }
+        }
+
         ++numReadRecords;
         
         // Clear the INFO field.
