@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2010  Regents of the University of Michigan
+ *  Copyright (C) 2012  Regents of the University of Michigan
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -31,14 +31,16 @@ void vcfVersion()
 
 void description()
 {
-    std::cerr << " vcfRefGen - Clean/Reduce VCF files removing the info field, saving only the GT genotype field, and removing any records where any kept sample is not phased or is missing a genotype" << std::endl;
+    std::cerr << " vcfRefGen - Generate VCF reference panel for imputation" << std::endl;
+    std::cerr << "             Clean/Reduce VCF files removing the info field, saving only the GT genotype field,\n"
+              << "             and removing any records where any kept sample is not phased or is missing a genotype\n\n" << std::endl;
 }
 
 void usage()
 {
     vcfVersion();
     description();
-    std::cerr << "\t./vcfRefGen --in <input VCF File> --out <output VCF File> [--uncompress] [--sample <sampleFile.txt>] [--minAC <minAlleleCount>] [--filterList <filterFile> [--params]"<< std::endl;
+    std::cerr << "./vcfRefGen --in <input VCF File> --out <output VCF File> [--uncompress] [--sample <sampleFile.txt>] [--minAC <minAlleleCount>] [--filterList <filterFile>] [--params]\n"<< std::endl;
     std::cerr << "\tRequired Parameters:\n"
               << "\t\t--in      : VCF file to read\n"
               << "\t\t--out     : VCF file to write\n"
@@ -204,6 +206,8 @@ int main(int argc, char ** argv)
     int numReadRecords = 0;
     int numWrittenRecords = 0;
     int returnVal = 0;
+
+    std::cerr << "Starting VCF reference panel generation... \n";
 
     // Set to only store/write the GT field.
     VcfRecordGenotype::addStoreField("GT");
