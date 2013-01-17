@@ -37,7 +37,7 @@ void usage()
 {
     vcfVersion();
     description();
-    std::cerr << "\t./vcfRefGen --in <input VCF File> --out <output VCF File> [--uncompress] [--sample <sampleFile.txt>] [--minAC <minAlleleCount>] [--filterList <chr start end> [--params]"<< std::endl;
+    std::cerr << "\t./vcfRefGen --in <input VCF File> --out <output VCF File> [--uncompress] [--sample <sampleFile.txt>] [--minAC <minAlleleCount>] [--filterList <chr start end> [--keepGT <field1,field2>] [--params]"<< std::endl;
     std::cerr << "\tRequired Parameters:\n"
               << "\t\t--in      : VCF file to read\n"
               << "\t\t--out     : VCF file to write\n"
@@ -46,6 +46,8 @@ void usage()
               << "\t\t--sampleSubset : file with samples IDs to keep.\n"
               << "\t\t--minAC        : min minor allele count to keep\n"
               << "\t\t--filterList   : regions to include, format: chr start end\n"
+              << "\t\t--keepGT       : comma separated list of genotype fields\n"
+              << "\t\t                 to keep in addition to the GT field.\n"
               << "\t\t--params       : print the parameter settings\n"
               << std::endl;
 }
@@ -58,6 +60,7 @@ int main(int argc, char ** argv)
     String outputVcf = "";
     String sampleSubset = "";
     String filterList = "";
+    String gtKeepList = "";
     int minAC = -1;
     bool uncompress = false;
     bool params = false;
@@ -73,6 +76,7 @@ int main(int argc, char ** argv)
         LONG_STRINGPARAMETER("sampleSubset", &sampleSubset)
         LONG_INTPARAMETER("minAC", &minAC)
         LONG_STRINGPARAMETER("filterList", &filterList)
+        LONG_STRINGPARAMETER("keepGT", &gtKeepList)
         LONG_PARAMETER("params", &params)
         END_LONG_PARAMETERS();
 
@@ -142,6 +146,19 @@ int main(int argc, char ** argv)
 
     // Set to only store/write the GT field.
     VcfRecordGenotype::addStoreField("GT");
+
+    // Parse the keep list to store/write those fields too.
+    if(!gtKeepList.IsEmpty())
+    {
+        // Keep additional fields.
+        StringArray gtFields;
+        gtFields.ReplaceColumns(gtKeepList, ',');
+        for(int i = 0; i < gtFields.Length(); i++)
+        {
+            VcfRecordGenotype::addStoreField(gtFields[i].c_str());
+        }
+    }
+
     while(inFile.readRecord(record))
     {
         ++numReadRecords;
