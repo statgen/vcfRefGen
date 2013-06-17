@@ -10,5 +10,10 @@
 ../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileGQHQ.vcf --keepGT GQ,HQ --uncompress 2> results/vcfFileGQHQ.vcf.log
 
 
+../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileRegionAll.vcf --uncompress --allfield --filterList testFiles/regionList.txt 2> results/vcfFileRegionAll.vcf.log
+../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileGQHQall.vcf --keepGT GQ,HQ --allfield --uncompress 2> results/vcfFileGQHQall.vcf.log
+../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileSubset1MinAC2all.vcf --allfield --uncompress --minAC 2 --sampleSubset testFiles/subset1.txt 2> results/vcfFileSubset1MinAC2all.vcf.log
+
+
 
 diff expected results

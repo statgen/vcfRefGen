@@ -45,6 +45,9 @@ void usage()
               << "\t\t--in      : VCF file to read\n"
               << "\t\t--out     : VCF file to write\n"
               << "\tOptional Parameters:\n"
+              << "\t\t--allfields    : keep info & all genotype fields and\n"
+              << "\t\t                 do not filter out non-phased or missing genotype\n"
+              << "\t\t                 genotype records.\n"
               << "\t\t--uncompress   : write an uncompressed VCF output file\n"
               << "\t\t--sampleSubset : file with samples IDs to keep.\n"
               << "\t\t--minAC        : min minor allele count to keep\n"
@@ -67,6 +70,7 @@ int main(int argc, char ** argv)
     String filterList = "";
     String gtKeepList = "";
     int minAC = -1;
+    bool allfields = false;
     bool uncompress = false;
     bool params = false;
     
@@ -80,6 +84,7 @@ int main(int argc, char ** argv)
         LONG_STRINGPARAMETER("in", &inputVcf)
         LONG_STRINGPARAMETER("out", &outputVcf)
         LONG_PARAMETER_GROUP("Optional Parameters")
+        LONG_PARAMETER("allfields", &allfields)
         LONG_PARAMETER("uncompress", &uncompress)
         LONG_STRINGPARAMETER("sampleSubset", &sampleSubset)
         LONG_INTPARAMETER("minAC", &minAC)
@@ -143,10 +148,13 @@ int main(int argc, char ** argv)
     {
         inFile.addDiscardMinMinorAlleleCount(minAC, NULL);
     }
-
-    // Do not keep any records with a missing GT or with a non-phased sample.
-    inFile.addDiscardRules(VcfFileReader::DISCARD_NON_PHASED | 
-                           VcfFileReader::DISCARD_MISSING_GT);
+    
+    if(!allfields)
+    {
+        // Do not keep any records with a missing GT or with a non-phased sample.
+        inFile.addDiscardRules(VcfFileReader::DISCARD_NON_PHASED | 
+                               VcfFileReader::DISCARD_MISSING_GT);
+    }
 
     if(!filterList.IsEmpty())
     {
@@ -213,18 +221,22 @@ int main(int argc, char ** argv)
 
     std::cerr << "Starting VCF reference panel generation... \n";
 
-    // Set to only store/write the GT field.
-    VcfRecordGenotype::addStoreField("GT");
-
-    // Parse the keep list to store/write those fields too.
-    if(!gtKeepList.IsEmpty())
+    // If not all fields are kept, only keep the specified ones.
+    if(!allfields)
     {
-        // Keep additional fields.
-        StringArray gtFields;
-        gtFields.ReplaceColumns(gtKeepList, ',');
-        for(int i = 0; i < gtFields.Length(); i++)
+        // Set to only store/write the GT field.
+        VcfRecordGenotype::addStoreField("GT");
+
+        // Parse the keep list to store/write those fields too.
+        if(!gtKeepList.IsEmpty())
         {
-            VcfRecordGenotype::addStoreField(gtFields[i].c_str());
+            // Keep additional fields.
+            StringArray gtFields;
+            gtFields.ReplaceColumns(gtKeepList, ',');
+            for(int i = 0; i < gtFields.Length(); i++)
+            {
+                VcfRecordGenotype::addStoreField(gtFields[i].c_str());
+            }
         }
     }
 
@@ -245,8 +257,11 @@ int main(int argc, char ** argv)
 
         ++numReadRecords;
         
-        // Clear the INFO field.
-        record.getInfo().clear();
+        if(!allfields)
+        {
+            // Clear the INFO field if not all fields are kept.
+            record.getInfo().clear();
+        }
         // Write the record.
         if(!outFile.writeRecord(record))
         {
