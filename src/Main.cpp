@@ -309,9 +309,12 @@ int main(int argc, char ** argv)
             for(int i = 0; i < origAltArray.size(); i++)
             {
                 record.setAlt(origAltArray.get(i).c_str());
-                newID = origID;
-                newID += '_' + origAltArray.get(i);
-                record.setID(newID.c_str());
+                if(origID != ".")
+                {
+                    newID = origID;
+                    newID += '_' + origAltArray.get(i);
+                    record.setID(newID.c_str());
+                }
                 // Loop through and update GTs for this alt.
                 for(unsigned int j = 0; j < gtVals[i].size(); j++)
                 {
