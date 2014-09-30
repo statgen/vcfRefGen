@@ -56,6 +56,9 @@ void usage()
               << "\t\t                 start & end positions should be 1-based inclusive positions.\n"
               << "\t\t--keepGT       : comma separated list of genotype fields\n"
               << "\t\t                 to keep in addition to the GT field.\n"
+              << "\t\t--splitMulti   : split multi-allelic sites into multiple bi-allelic sites\n"
+              << "\t\t                 Genotypes for samples with the alternate not represented\n"
+              << "\t\t                 in each bi-allelic site will be set to '0'.\n"
               << "\t\t--params       : print the parameter settings\n"
               << std::endl;
 }
@@ -72,8 +75,9 @@ int main(int argc, char ** argv)
     int minAC = -1;
     bool allfields = false;
     bool uncompress = false;
+    bool splitMulti = false;
     bool params = false;
-    
+
     IntervalTree<int> regions;
     std::vector<int> intersection;
 
@@ -90,6 +94,7 @@ int main(int argc, char ** argv)
         LONG_INTPARAMETER("minAC", &minAC)
         LONG_STRINGPARAMETER("filterList", &filterList)
         LONG_STRINGPARAMETER("keepGT", &gtKeepList)
+        LONG_PARAMETER("splitMulti", &splitMulti)
         LONG_PARAMETER("params", &params)
         END_LONG_PARAMETERS();
 
@@ -240,6 +245,10 @@ int main(int argc, char ** argv)
         }
     }
 
+    ReusableVector<std::string> origAltArray;
+    std::vector<std::vector<std::pair<int, int> > > gtVals;
+    std::pair<int, int> gtPair;
+
     while(inFile.readRecord(record))
     {
         if(!filterList.IsEmpty())
@@ -262,14 +271,80 @@ int main(int argc, char ** argv)
             // Clear the INFO field if not all fields are kept.
             record.getInfo().clear();
         }
-        // Write the record.
-        if(!outFile.writeRecord(record))
+
+        if(splitMulti && (record.getNumAlts() > 1))
         {
-            // Write error.
-            std::cerr << "Failed writing a vcf record.\n";
-            returnVal = -1;
+            origAltArray.clear();
+            gtVals.clear();
+            gtVals.resize(record.getNumAlts());
+            for(unsigned int i = 1; i <= record.getNumAlts(); i++)
+            {
+                // Alts start at index 1 of getAlleles
+                origAltArray.getNextEmpty() = record.getAlleles(i);
+                
+            }
+            // Loop through samples to store orig GT
+            for(int smNum = 0; smNum < record.getNumSamples(); smNum++)
+            {
+                // For each sample, loop through the GTs.
+                for(int gtNum = 0; gtNum < record.getNumGTs(smNum); gtNum++)
+                {
+                    int allele = record.getGT(smNum, gtNum);
+                    if(allele > 0)
+                    {
+                        // Alternate, store it.
+                        gtPair.first = smNum;
+                        gtPair.second = gtNum;
+                        gtVals[allele-1].push_back(gtPair);
+                        // Init all to 0
+                        record.setGT(smNum, gtNum, 0);
+                    }
+                }
+            }
+            // Need to copy to string since const char* points to the record
+            // value which changes when a new ID is set.
+            std::string origID = record.getIDStr();
+            std::string newID;
+            // Loop through each alt (start at 0 of origAltArray).
+            for(int i = 0; i < origAltArray.size(); i++)
+            {
+                record.setAlt(origAltArray.get(i).c_str());
+                newID = origID;
+                newID += '_' + origAltArray.get(i);
+                record.setID(newID.c_str());
+                // Loop through and update GTs for this alt.
+                for(unsigned int j = 0; j < gtVals[i].size(); j++)
+                {
+                    record.setGT(gtVals[i][j].first, gtVals[i][j].second, 1);
+                }
+
+                // Write the record.
+                if(!outFile.writeRecord(record))
+                {
+                    // Write error.
+                    std::cerr << "Failed writing a vcf record.\n";
+                    returnVal = -1;
+                }
+                // Loop through and reset GTs for this alt back to 0.
+                for(unsigned int j = 0; j < gtVals[i].size(); j++)
+                {
+                    record.setGT(gtVals[i][j].first, gtVals[i][j].second, 0);
+                }
+                ++numWrittenRecords;
+            }
+            
         }
-        ++numWrittenRecords;
+        else
+        {
+            // Write the record.
+            if(!outFile.writeRecord(record))
+            {
+                // Write error.
+                std::cerr << "Failed writing a vcf record.\n";
+                returnVal = -1;
+            }
+            ++numWrittenRecords;
+        }
     }
  
     std::cerr << "NumReadRecords: " << inFile.getNumRecords()
