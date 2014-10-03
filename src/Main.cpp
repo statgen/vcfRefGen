@@ -64,6 +64,32 @@ void usage()
 }
 
 
+bool validateMinorAlleleCount(VcfRecord& record, int32_t minAC)
+{
+    // Get the number of possible alternates.
+    unsigned int numAlts = record.getNumAlts();
+
+    // Verify that each allele has the min count.
+    bool failMinorAlleleCount = false;
+    for(unsigned int i = 0; i <= numAlts; i++)
+    {
+        if(record.getAlleleCount(i, NULL) < minAC)
+        {
+            // Not enough of one gt, so not ok.
+            failMinorAlleleCount = true;
+            break;
+        }
+    }
+    if(failMinorAlleleCount)
+    {
+        // not enough alleles, return false.
+        return(false);
+    }
+    return(true);
+}
+
+
+
 int main(int argc, char ** argv)
 {
     String refFile = "";
@@ -149,7 +175,9 @@ int main(int argc, char ** argv)
     }
 
     // Add the discard rule for minor allele count.
-    if(minAC >= 0)
+    // Only add it to the file if we are not splitting.
+    // If we are splitting, then we need to do it after splitting.
+    if((minAC >= 0) && !splitMulti)
     {
         inFile.addDiscardMinMinorAlleleCount(minAC, NULL);
     }
@@ -264,8 +292,6 @@ int main(int argc, char ** argv)
             }
         }
 
-        ++numReadRecords;
-        
         if(!allfields)
         {
             // Clear the INFO field if not all fields are kept.
@@ -305,6 +331,7 @@ int main(int argc, char ** argv)
             // value which changes when a new ID is set.
             std::string origID = record.getIDStr();
             std::string newID;
+            bool allFiltered = (minAC >= 0);
             // Loop through each alt (start at 0 of origAltArray).
             for(int i = 0; i < origAltArray.size(); i++)
             {
@@ -321,6 +348,18 @@ int main(int argc, char ** argv)
                     record.setGT(gtVals[i][j].first, gtVals[i][j].second, 1);
                 }
 
+                // Validate minor allele count.
+                if(minAC >= 0)
+                {
+                    if(!validateMinorAlleleCount(record, minAC))
+                    {
+                        // outside min minor allele count, 
+                        // so continue to the next alt.
+                        continue;
+                    }
+                    allFiltered = false;
+                }
+
                 // Write the record.
                 if(!outFile.writeRecord(record))
                 {
@@ -335,10 +374,25 @@ int main(int argc, char ** argv)
                 }
                 ++numWrittenRecords;
             }
-            
+            if(!allFiltered)
+            {
+                ++numReadRecords;
+            }
         }
         else
         {
+            if(splitMulti && (minAC >= 0))
+            {
+                // Validate minor allele count.
+                if(!validateMinorAlleleCount(record, minAC))
+                {
+                    // outside min minor allele count, 
+                    // so continue to the next record.
+                    continue;
+                }
+            }
+            ++numReadRecords;
+        
             // Write the record.
             if(!outFile.writeRecord(record))
             {
