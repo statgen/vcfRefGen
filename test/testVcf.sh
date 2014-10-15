@@ -21,4 +21,10 @@
 
 ../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileSubset1MinAC2allSplit.vcf --minAC 2 --allfield --uncompress --sampleSubset testFiles/subset1.txt --splitMulti 2> results/vcfFileSubset1MinAC2allSplit.vcf.log
 
+../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileSubset1MinAC2allSplitUpdateID.vcf --minAC 2 --allfield --uncompress --sampleSubset testFiles/subset1.txt --splitMulti --idUpdate 2> results/vcfFileSubset1MinAC2allSplitUpdateID.vcf.log
+
+../bin/vcfRefGen --in testFiles/vcfFile.vcf --out results/vcfFileBiUpdateID.vcf --uncompress --splitMulti --idUpdate 2> results/vcfFileBiUpdateID.vcf.log
+
+../bin/vcfRefGen --in testFiles/vcfFileSV.vcf --out results/vcfFileSVBiUpdateID.vcf --uncompress --splitMulti --idUpdate 2> results/vcfFileSVBiUpdateID.vcf.log
+
 diff expected results

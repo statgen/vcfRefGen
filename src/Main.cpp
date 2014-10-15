@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2012  Regents of the University of Michigan
+ *  Copyright (C) 2012-2014  Regents of the University of Michigan
  *
  *   This program is free software: you can redistribute it and/or modify
  *   it under the terms of the GNU General Public License as published by
@@ -22,6 +22,9 @@
 #include "VcfFileWriter.h"
 #include "StringBasics.h"
 #include "IntervalTree.h"
+
+void updateID(VcfRecord& record, const char* origID, const char* alt,
+              const std::string* svlen);
 
 void vcfVersion()
 {
@@ -59,6 +62,11 @@ void usage()
               << "\t\t--splitMulti   : split multi-allelic sites into multiple bi-allelic sites\n"
               << "\t\t                 Genotypes for samples with the alternate not represented\n"
               << "\t\t                 in each bi-allelic site will be set to '0'.\n"
+              << "\t\t--idUpdate     : update the id to:\n"
+              << "\t\t                   1) rsID:position:ref:alt\n"
+              << "\t\t                   2) chr:position:ref:alt\n"
+              << "\t\t                   3) rsID:position:ref:alt:END (SV)\n"
+              << "\t\t                   4) chr:position:ref:alt:END (SV)\n"
               << "\t\t--params       : print the parameter settings\n"
               << std::endl;
 }
@@ -103,6 +111,7 @@ int main(int argc, char ** argv)
     bool uncompress = false;
     bool splitMulti = false;
     bool params = false;
+    bool idUpdate = false;
 
     IntervalTree<int> regions;
     std::vector<int> intersection;
@@ -121,6 +130,7 @@ int main(int argc, char ** argv)
         LONG_STRINGPARAMETER("filterList", &filterList)
         LONG_STRINGPARAMETER("keepGT", &gtKeepList)
         LONG_PARAMETER("splitMulti", &splitMulti)
+        LONG_PARAMETER("idUpdate", &idUpdate)
         LONG_PARAMETER("params", &params)
         END_LONG_PARAMETERS();
 
@@ -292,12 +302,6 @@ int main(int argc, char ** argv)
             }
         }
 
-        if(!allfields)
-        {
-            // Clear the INFO field if not all fields are kept.
-            record.getInfo().clear();
-        }
-
         if(splitMulti && (record.getNumAlts() > 1))
         {
             origAltArray.clear();
@@ -331,17 +335,26 @@ int main(int argc, char ** argv)
             // value which changes when a new ID is set.
             std::string origID = record.getIDStr();
             std::string newID;
+            const std::string* svlen = record.getInfo().getString("SVLEN");
+
             bool allFiltered = (minAC >= 0);
             // Loop through each alt (start at 0 of origAltArray).
             for(int i = 0; i < origAltArray.size(); i++)
             {
                 record.setAlt(origAltArray.get(i).c_str());
-                if(origID != ".")
+                if(idUpdate)
+                {
+                    updateID(record, origID.c_str(), 
+                             origAltArray.get(i).c_str(),
+                             svlen);
+                }
+                else if(origID != ".")
                 {
                     newID = origID;
                     newID += '_' + origAltArray.get(i);
                     record.setID(newID.c_str());
                 }
+
                 // Loop through and update GTs for this alt.
                 for(unsigned int j = 0; j < gtVals[i].size(); j++)
                 {
@@ -358,6 +371,13 @@ int main(int argc, char ** argv)
                         continue;
                     }
                     allFiltered = false;
+                }
+
+                if(!allfields)
+                {
+                    // Clear the INFO field if not all fields are kept.
+                    // Must be after updateID because it needs SVLEN.
+                    record.getInfo().clear();
                 }
 
                 // Write the record.
@@ -393,6 +413,19 @@ int main(int argc, char ** argv)
             }
             ++numReadRecords;
         
+            if(idUpdate)
+            {
+                const std::string* svlen = record.getInfo().getString("SVLEN");
+                updateID(record, record.getIDStr(), record.getAltStr(), svlen);
+            }
+            
+            if(!allfields)
+            {
+                // Clear the INFO field if not all fields are kept.
+                // Must be after updateID because it needs SVLEN.
+                record.getInfo().clear();
+            }
+
             // Write the record.
             if(!outFile.writeRecord(record))
             {
@@ -413,4 +446,33 @@ int main(int argc, char ** argv)
     outFile.close();   
 
     return(returnVal);
+}
+
+
+void updateID(VcfRecord& record, const char* origID, const char* alt,
+              const std::string* svlen)
+{
+    String newID;
+
+    if(strcmp(origID, ".") == 0)
+    {
+        newID = record.getChromStr();
+    }
+    else
+    {
+        newID = origID;
+    }
+    newID += ":";
+    newID += record.get1BasedPosition();
+    newID += ":";
+    newID += record.getRefStr();
+    newID += ":";
+    newID += alt;
+
+    if((alt[0] == '<') && (svlen != NULL))
+    {
+        newID += ":";
+        newID += svlen->c_str();
+    }
+    record.setID(newID.c_str());
 }
